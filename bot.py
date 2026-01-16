@@ -3,11 +3,17 @@
 # VIDVAUL STYLE (IG/TT/FB/YT)
 # ONE MESSAGE (VIDEO + BUTTON)
 # MODE 1 MODAL (HP SAFE)
+# KOYEB FREE SAFE
+# PLUGIN SYSTEM ENABLED
 # =========================
 
 import os
 import asyncio
 import uuid
+import threading
+import importlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 import discord
 from discord import app_commands
 from qcloud_cos import CosConfig, CosS3Client
@@ -29,6 +35,20 @@ DOMAIN = "https://iprimeteam.my.id"
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# ==============================
+# HTTP DUMMY (KOYEB FREE)
+# ==============================
+def run_http():
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Iprime Bot is running")
+
+    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+
+threading.Thread(target=run_http, daemon=True).start()
 
 # ==============================
 
@@ -102,25 +122,27 @@ class VidVaulButtons(discord.ui.View):
 
         self.add_item(discord.ui.Button(
             label="Donasi",
-            url="https://saweria.co/iprime",
+            url="https://saweria.co/Indoprime",
             style=discord.ButtonStyle.link
         ))
 
     @discord.ui.button(label="Download Audio", style=discord.ButtonStyle.primary, emoji="🎵", row=1)
     async def audio(self, interaction: discord.Interaction, _):
-        await interaction.response.send_message("⏳ Mengambil audio...", ephemeral=True)
-
+        await interaction.response.defer(ephemeral=True)
         uid = uuid.uuid4().hex[:6]
         path = os.path.join(DOWNLOAD_DIR, f"{uid}.mp3")
-        await download_audio(self.source_url, path)
-        await interaction.followup.send(file=discord.File(path))
-        os.remove(path)
+        try:
+            await download_audio(self.source_url, path)
+            await interaction.followup.send(file=discord.File(path), ephemeral=True)
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
 
 # ========= MODAL =========
 class DownloadModal(discord.ui.Modal, title="Video Download"):
     video_url = discord.ui.TextInput(
         label="Video Link",
-        placeholder="Instagram / TikTok / FB / YouTube",
+        placeholder="Instagram / TikTok / Facebook / YouTube",
         required=True
     )
 
@@ -129,9 +151,7 @@ class DownloadModal(discord.ui.Modal, title="Video Download"):
 
 # ========= PROCESS =========
 async def process_video(interaction: discord.Interaction, url: str):
-    platform = detect_platform(url)
-    await interaction.response.send_message(f"⏳ Mengambil video dari **{platform}**...")
-
+    await interaction.response.defer()
     uid = uuid.uuid4().hex[:8]
     path = os.path.join(DOWNLOAD_DIR, f"{uid}.mp4")
 
@@ -155,16 +175,33 @@ async def process_video(interaction: discord.Interaction, url: str):
             os.remove(path)
 
 # ========= COMMAND =========
-@tree.command(name="download", description="Download video (IG/TT/FB/YT)")
+@tree.command(name="download", description="Download video (IG / TT / FB / YT)")
 async def download(interaction: discord.Interaction):
     try:
         await interaction.response.send_modal(DownloadModal())
     except discord.NotFound:
         pass
 
+# ========= PLUGIN LOADER =========
+def load_plugins():
+    if not os.path.isdir("plugins"):
+        return
+
+    for file in os.listdir("plugins"):
+        if file.endswith(".py") and not file.startswith("_"):
+            name = f"plugins.{file[:-3]}"
+            try:
+                module = importlib.import_module(name)
+                if hasattr(module, "setup"):
+                    module.setup(client, tree)
+                    print(f"🔌 Plugin loaded: {file}")
+            except Exception as e:
+                print(f"❌ Failed loading plugin {file}: {e}")
+
 # ========= READY =========
 @client.event
 async def on_ready():
+    load_plugins()
     await tree.sync()
     print(f"✅ Bot online sebagai {client.user}")
 
