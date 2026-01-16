@@ -1,14 +1,15 @@
 # =========================
-# Iprime-Bot FINAL
+# Iprime-Bot FINAL FIX
 # IG / TT / FB / YT
-# Cookies ENV + FFmpeg
-# Plugin System Ready
+# Cookies ENV + COS CDN
+# Modal + Plugin System
 # =========================
 
 import os
 import asyncio
 import uuid
 import threading
+import shutil
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import importlib
 
@@ -24,25 +25,29 @@ IG_COOKIES = os.getenv("IG_COOKIES")
 
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN missing")
-
 if not SECRET_ID or not SECRET_KEY:
     raise RuntimeError("Tencent COS ENV missing")
-
 if not IG_COOKIES:
     raise RuntimeError("IG_COOKIES ENV missing")
 
-# ========= WRITE COOKIE =========
-with open("ig_cookies.txt", "w") as f:
-    f.write(IG_COOKIES)
+# ========= CHECK FFMPEG =========
+if not shutil.which("ffmpeg"):
+    raise RuntimeError("ffmpeg not found")
 
-# ========= HTTP DUMMY =========
+# ========= WRITE IG COOKIES (NETSCAPE FIX) =========
+with open("ig_cookies.txt", "w") as f:
+    f.write("# Netscape HTTP Cookie File\n")
+    f.write("# https://curl.haxx.se/rfc/cookie_spec.html\n")
+    f.write("# This is a generated file! Do not edit.\n\n")
+    f.write(IG_COOKIES.strip() + "\n")
+
+# ========= HTTP DUMMY (KOYEB KEEPALIVE) =========
 def run_http():
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Iprime Bot Running")
-
     HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
 
 threading.Thread(target=run_http, daemon=True).start()
@@ -55,7 +60,7 @@ intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# ========= PLATFORM =========
+# ========= PLATFORM DETECT =========
 def detect_platform(url: str):
     u = url.lower()
     if "instagram" in u: return "Instagram"
@@ -64,7 +69,7 @@ def detect_platform(url: str):
     if "youtube" in u or "youtu.be" in u: return "YouTube"
     return "Video"
 
-# ========= COS =========
+# ========= COS CONFIG =========
 REGION = "ap-singapore"
 BUCKET = "ip-1339522405"
 DOMAIN = "https://iprimeteam.my.id"
@@ -88,11 +93,13 @@ def upload_to_cos(local, name):
     )
     return f"{DOMAIN}/{key}"
 
-# ========= YTDLP =========
+# ========= YTDLP (ANTI LIMIT FIX) =========
 async def download_video(url, out):
     cmd = [
         "yt-dlp",
         "--cookies", "ig_cookies.txt",
+        "--sleep-interval", "2",
+        "--max-sleep-interval", "5",
         "-f", "bv*+ba/b",
         "--merge-output-format", "mp4",
         "-o", out,
@@ -101,17 +108,18 @@ async def download_video(url, out):
     proc = await asyncio.create_subprocess_exec(*cmd)
     await proc.communicate()
 
-# ========= BUTTON =========
+# ========= BUTTON VIEW (FIXED) =========
 class VidButtons(discord.ui.View):
-    def __init__(self, url):
+    def __init__(self, video_url=None):
         super().__init__(timeout=180)
+        if video_url:
+            self.add_item(discord.ui.Button(
+                label="▶️ Go to Video",
+                url=video_url,
+                style=discord.ButtonStyle.link
+            ))
         self.add_item(discord.ui.Button(
-            label="Go to Video",
-            url=url,
-            style=discord.ButtonStyle.link
-        ))
-        self.add_item(discord.ui.Button(
-            label="Donasi",
+            label="❤️ Donasi",
             url="https://saweria.co/Indoprime",
             style=discord.ButtonStyle.link
         ))
@@ -139,22 +147,25 @@ class DownloadModal(discord.ui.Modal, title="Video Downloader"):
 
             size = os.path.getsize(path) / (1024 * 1024)
 
+            # Discord upload kecil
             if size <= 25:
                 await interaction.followup.send(
                     file=discord.File(path),
-                    view=VidButtons(self.url.value)
+                    view=VidButtons()
                 )
+            # Upload ke COS
             else:
                 link = upload_to_cos(path, f"{uid}.mp4")
                 await interaction.followup.send(
                     content=link,
-                    view=VidButtons(self.url.value)
+                    view=VidButtons(link)
                 )
+
         finally:
             if os.path.exists(path):
                 os.remove(path)
 
-# ========= COMMAND =========
+# ========= SLASH COMMAND =========
 @tree.command(name="download", description="IG / TT / FB / YT Downloader")
 async def download(interaction: discord.Interaction):
     await interaction.response.send_modal(DownloadModal())
