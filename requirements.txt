@@ -1,4 +1,4 @@
-discord.py
+discord.py==2.3.2
 yt-dlp
-qcloud_cos
+qcloud_cos==3.3.6
 aiohttp
