@@ -1,4 +1,4 @@
 discord.py==2.3.2
 yt-dlp
-tencentcloud-sdk-python-cos
+cos-python-sdk-v5
 aiohttp
