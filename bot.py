@@ -98,6 +98,7 @@ def upload_to_cos(local, name):
 async def download_video(url, out):
     cmd = [
         "yt-dlp",
+        "--impersonate", "chrome",
         "--cookies", "ig_cookies.txt",
         "--sleep-interval", "2",
         "--max-sleep-interval", "5",
