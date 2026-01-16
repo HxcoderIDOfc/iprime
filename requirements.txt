@@ -1,4 +1,6 @@
 discord.py==2.3.2
 yt-dlp
+curl_cffi
 aiohttp
 cos-python-sdk-v5
+PyNaCl
