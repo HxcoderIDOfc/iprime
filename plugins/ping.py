@@ -1,8 +1,7 @@
 from discord import app_commands
-import discord
 
-def setup(client, tree):
+def setup(tree: app_commands.CommandTree):
 
-    @tree.command(name="ping", description="Cek bot hidup")
-    async def ping(interaction: discord.Interaction):
-        await interaction.response.send_message("🏓 Pong dari plugin!")
+    @tree.command(name="ping", description="Cek bot latency")
+    async def ping(interaction):
+        await interaction.response.send_message("🏓 Pong!")
